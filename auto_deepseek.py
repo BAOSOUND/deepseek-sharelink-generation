@@ -1,5 +1,5 @@
 """
-DeepSeek网页版自动化模块 - 云端适配版（修复密码登录按钮）
+DeepSeek网页版自动化模块 - 云端适配版（用SVG特征定位密码登录）
 """
 
 import asyncio
@@ -69,7 +69,7 @@ class DeepSeekAuto:
         return self
     
     async def ensure_login(self):
-        """确保已登录 - 修复密码登录按钮选择"""
+        """确保已登录 - 用SVG特征定位密码登录"""
         
         print("\n========== 开始登录流程 ==========")
         
@@ -102,47 +102,46 @@ class DeepSeekAuto:
             print(f"❌ 登录页加载失败: {e}")
             return False
         
-        # ===== 修复：正确选择密码登录按钮 =====
-        print("【步骤4】查找密码登录按钮...")
+        # ===== 关键修复：用SVG特征定位密码登录按钮 =====
+        print("【步骤4】用SVG特征定位密码登录按钮...")
         try:
-            # 方法1: 通过文本找"密码登录"
-            password_login = await self.page.evaluate('''
+            click_result = await self.page.evaluate('''
                 () => {
                     const buttons = document.querySelectorAll('button.ds-sign-in-form__social-button');
+                    
+                    // 用SVG特征找密码登录按钮
                     for (let i = 0; i < buttons.length; i++) {
                         const btn = buttons[i];
-                        const spans = btn.querySelectorAll('span');
-                        for (let span of spans) {
-                            if (span.textContent && span.textContent.includes('密码登录')) {
-                                btn.click();
-                                return {success: true, method: 'text_match'};
+                        const svg = btn.querySelector('svg');
+                        if (svg) {
+                            const path = svg.querySelector('path');
+                            if (path) {
+                                const d = path.getAttribute('d') || '';
+                                // 密码登录按钮的SVG特征
+                                if (d.includes('8.65039') || d.includes('M8.65039')) {
+                                    btn.click();
+                                    return {success: true, method: 'svg_match'};
+                                }
                             }
                         }
+                    }
+                    
+                    // 如果没找到，点第二个按钮（备用方案）
+                    if (buttons.length >= 2) {
+                        buttons[1].click();
+                        return {success: true, method: 'fallback'};
                     }
                     return {success: false};
                 }
             ''')
             
-            if password_login.get('success'):
-                print("✅ 找到并点击'密码登录'按钮")
-            else:
-                # 方法2: 点第二个按钮（通常第二个是密码登录）
-                buttons = await self.page.query_selector_all('button.ds-sign-in-form__social-button')
-                print(f"找到 {len(buttons)} 个社交登录按钮")
-                
-                if len(buttons) >= 2:
-                    await buttons[1].click()
-                    print("✅ 点击第二个按钮（应该是密码登录）")
-                else:
-                    print("❌ 找不到足够的按钮")
-                    return False
-            
+            print(f"点击结果: {click_result}")
             await asyncio.sleep(2)
             
         except Exception as e:
             print(f"❌ 点击按钮失败: {e}")
             return False
-        # ====================================
+        # ============================================
         
         # 步骤5: 输入账号密码
         print("【步骤5】输入账号密码...")
