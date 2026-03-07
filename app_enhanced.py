@@ -348,17 +348,72 @@ st.caption("💡 提示：批量处理时请耐心等待")
 # ===== 部署修复：安装playwright浏览器 =====
 import subprocess
 import sys
+import os
+import time
 
 def setup_playwright():
     """确保playwright浏览器已安装"""
     try:
-        print("正在检查playwright浏览器...")
-        subprocess.run(["playwright", "install", "chromium"], check=True)
-        print("playwright浏览器就绪")
+        print("🔧 开始安装playwright浏览器...")
+        
+        # 先检查playwright版本
+        version_result = subprocess.run(
+            ["playwright", "--version"],
+            capture_output=True,
+            text=True
+        )
+        print(f"📦 Playwright版本: {version_result.stdout.strip()}")
+        
+        # 安装chromium浏览器（不是msedge）
+        print("📥 正在安装chromium浏览器...")
+        
+        # 方法1：安装特定浏览器
+        install_result = subprocess.run(
+            ["playwright", "install", "chromium"],
+            capture_output=True,
+            text=True,
+            timeout=180
+        )
+        
+        if install_result.returncode == 0:
+            print("✅ chromium浏览器安装成功")
+            if install_result.stdout:
+                print(install_result.stdout)
+        else:
+            print("⚠️ 特定浏览器安装失败，尝试安装所有浏览器...")
+            # 方法2：安装所有浏览器
+            fallback_result = subprocess.run(
+                ["playwright", "install"],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            if fallback_result.returncode == 0:
+                print("✅ 所有浏览器安装成功")
+            else:
+                print("❌ 浏览器安装失败")
+                print(f"错误: {fallback_result.stderr}")
+                
+    except subprocess.TimeoutExpired:
+        print("⏱️ 安装超时，但可能已部分完成")
     except Exception as e:
-        print(f"playwright浏览器安装失败: {e}")
+        print(f"❌ 安装过程出错: {e}")
+    finally:
+        # 验证安装
+        try:
+            browsers = subprocess.run(
+                ["playwright", "install", "--help"],
+                capture_output=True,
+                text=True
+            )
+            print("✅ playwright命令可用")
+        except:
+            pass
 
-# 只在非windows系统或明确需要时执行（避免本地重复安装）
+# 只在非windows系统执行（Streamlit Cloud 是 Linux）
 if not sys.platform.startswith('win'):
+    print("🖥️ 检测到Linux系统，开始安装playwright浏览器...")
     setup_playwright()
+else:
+    print("🖥️ Windows系统，跳过playwright安装")
 # ======================================
