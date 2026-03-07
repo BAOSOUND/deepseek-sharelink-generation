@@ -1,5 +1,5 @@
 """
-DeepSeek网页版自动化模块 - 调试版（输出详细日志）
+DeepSeek网页版自动化模块 - 云端适配版
 """
 
 import asyncio
@@ -15,7 +15,15 @@ load_dotenv()
 
 class DeepSeekAuto:
     def __init__(self, headless=True, timeout=60):
-        self.headless = headless
+        # ===== 关键修复：云端强制 headless =====
+        is_linux = sys.platform.startswith('linux')
+        if is_linux:
+            print("🐧 Linux环境：强制使用 headless 模式")
+            self.headless = True
+        else:
+            self.headless = headless
+        # ====================================
+        
         self.timeout = timeout * 1000
         self.base_dir = Path(__file__).parent
         self.user_data_dir = self.base_dir / "browser_data"
@@ -26,15 +34,15 @@ class DeepSeekAuto:
         self._last_read_link = None
         
     async def start(self):
-        print("【调试】开始启动浏览器...")
+        print("【启动】开始启动浏览器...")
         self.playwright = await async_playwright().start()
         
         is_linux = sys.platform.startswith('linux')
-        print(f"【调试】系统平台: {sys.platform}, is_linux: {is_linux}")
+        print(f"【启动】系统平台: {sys.platform}, headless: {self.headless}")
         
         launch_options = {
             'user_data_dir': str(self.user_data_dir),
-            'headless': self.headless,
+            'headless': self.headless,  # Linux 下强制为 True
             'args': [
                 '--disable-blink-features=AutomationControlled',
                 '--no-sandbox',
@@ -46,24 +54,23 @@ class DeepSeekAuto:
         
         if is_linux:
             launch_options['user_agent'] = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            print("【调试】Linux环境: 使用 Chromium")
         
         try:
-            print("【调试】正在创建浏览器上下文...")
+            print("【启动】正在创建浏览器上下文...")
             self.context = await self.playwright.chromium.launch_persistent_context(**launch_options)
-            print("【调试】浏览器上下文创建成功")
+            print("【启动】浏览器上下文创建成功")
         except Exception as e:
-            print(f"【调试】启动浏览器失败: {e}")
+            print(f"【启动】启动浏览器失败: {e}")
             raise
         
         self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
         self.page.set_default_timeout(self.timeout)
-        print("【调试】页面创建成功")
+        print("【启动】页面创建成功")
         
         return self
     
     async def ensure_login(self):
-        """确保已登录 - 详细调试版"""
+        """确保已登录 - 云端适配版"""
         
         print("\n========== 开始登录流程 ==========")
         
@@ -83,8 +90,8 @@ class DeepSeekAuto:
             await self.page.wait_for_selector('textarea, div[contenteditable="true"]', timeout=5000)
             print("✅ 检测到输入框，已登录")
             return True
-        except Exception as e:
-            print(f"⏱️ 未检测到输入框，需要登录: {e}")
+        except:
+            print("⏱️ 未检测到输入框，需要登录")
         
         # 步骤3: 访问登录页
         print("【步骤3】访问登录页...")
@@ -96,24 +103,17 @@ class DeepSeekAuto:
             print(f"❌ 登录页加载失败: {e}")
             return False
         
-        # 步骤4: 截图当前页面
-        try:
-            await self.page.screenshot(path="debug_login_page.png")
-            print("✅ 已保存登录页截图: debug_login_page.png")
-        except:
-            pass
-        
-        # 步骤5: 找密码登录按钮
+        # 步骤4: 找密码登录按钮
         print("【步骤4】查找密码登录按钮...")
         try:
-            # 尝试直接找第二个按钮
+            # 直接找第二个按钮
             buttons = await self.page.query_selector_all('button.ds-sign-in-form__social-button')
             print(f"找到 {len(buttons)} 个社交登录按钮")
             
             if len(buttons) >= 2:
                 await buttons[1].click()
                 print("✅ 点击第二个按钮")
-                await asyncio.sleep(1)
+                await asyncio.sleep(2)
             else:
                 print("❌ 找不到第二个按钮")
                 return False
@@ -121,20 +121,16 @@ class DeepSeekAuto:
             print(f"❌ 点击按钮失败: {e}")
             return False
         
-        # 步骤6: 输入账号密码
+        # 步骤5: 输入账号密码
         print("【步骤5】输入账号密码...")
         username = os.getenv("DEEPSEEK_USER")
         password = os.getenv("DEEPSEEK_PWD")
-        
-        print(f"账号是否存在: {'是' if username else '否'}")
-        print(f"密码是否存在: {'是' if password else '否'}")
         
         if not username or not password:
             print("❌ 请设置账号密码")
             return False
         
         try:
-            await asyncio.sleep(1)
             inputs = await self.page.query_selector_all('input')
             print(f"找到 {len(inputs)} 个输入框")
             
@@ -150,16 +146,15 @@ class DeepSeekAuto:
             print(f"❌ 输入账号密码失败: {e}")
             return False
         
-        # 步骤7: 点击登录按钮
+        # 步骤6: 点击登录按钮
         print("【步骤6】点击登录按钮...")
         try:
             login_btn = None
             buttons = await self.page.query_selector_all('button')
             for btn in buttons:
                 btn_text = await btn.text_content()
-                if btn_text and ('登录' in btn_text or '登陆' in btn_text or 'Login' in btn_text):
+                if btn_text and ('登录' in btn_text or '登陆' in btn_text):
                     login_btn = btn
-                    print(f"找到登录按钮: {btn_text}")
                     break
             
             if login_btn:
@@ -172,18 +167,16 @@ class DeepSeekAuto:
             print(f"❌ 点击登录按钮失败: {e}")
             return False
         
-        # 步骤8: 等待登录成功
+        # 步骤7: 等待登录成功
         print("【步骤7】等待登录成功...")
-        for i in range(10):
+        for i in range(15):
             await asyncio.sleep(1)
             try:
                 await self.page.wait_for_selector('textarea, div[contenteditable="true"]', timeout=1000)
-                print("✅ 检测到输入框，登录成功！")
-                # 保存成功截图
-                await self.page.screenshot(path="debug_login_success.png")
+                print("✅ 登录成功！")
                 return True
             except:
-                print(f"⏳ 等待登录完成... ({i+1}/10)")
+                print(f"⏳ 等待登录... ({i+1}/15)")
                 continue
         
         print("❌ 登录超时")
@@ -198,7 +191,7 @@ class DeepSeekAuto:
                     if (newChatBtn) newChatBtn.click();
                 }
             ''')
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.5)
         except:
             pass
     
@@ -297,10 +290,13 @@ class DeepSeekAuto:
         """获取分享链接"""
         if not await self.click_share_button():
             return None
+        await asyncio.sleep(1)
         if not await self.click_create_share():
             return None
+        await asyncio.sleep(1)
         if not await self.click_create_and_copy():
             return None
+        await asyncio.sleep(1)
         return await self.get_share_link_from_clipboard()
     
     async def search_and_get_share_link(self, query):
@@ -319,9 +315,9 @@ class DeepSeekAuto:
             share_link = await self.get_share_link()
             
             if share_link:
-                print(f"✅ 获取到链接: {share_link[:50]}...")
+                print(f"✅ 成功")
             else:
-                print("❌ 获取链接失败")
+                print("❌ 失败")
             
             return share_link
             
