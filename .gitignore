@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 环境变量
+.env
+.env.local
+.env.*
+
+# 虚拟环境
+venv/
+env/
+ENV/
+myenv/
+
+# Cookie和缓存
+cookies/
+*.json
+*.log
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 项目特定
+temp/
+*.tmp

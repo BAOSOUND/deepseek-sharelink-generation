@@ -1,0 +1,10 @@
+# Streamlit Cloud 系统依赖
+chromium
+chromium-driver
+fonts-liberation
+libnss3
+libatk-bridge2.0-0
+libdrm2
+libxkbcommon0
+libgbm1
+libasound2
