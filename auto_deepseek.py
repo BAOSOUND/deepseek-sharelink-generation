@@ -65,7 +65,11 @@ class DeepSeekAuto:
             # 其他系统默认
             print("⚠️ 未知环境: 使用默认浏览器")
         
-        self.context = await self.playwright.chromium.launch_persistent_context(**launch_options)
+        try:
+            self.context = await self.playwright.chromium.launch_persistent_context(**launch_options)
+        except Exception as e:
+            print(f"❌ 启动浏览器失败: {e}")
+            raise
         
         self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
         self.page.set_default_timeout(self.timeout)
@@ -361,75 +365,43 @@ class DeepSeekAuto:
         return await self.get_share_link_from_clipboard()
     
     async def search_and_get_share_link(self, query):
-        """搜索并获取分享链接 - 调试版"""
+        """搜索并获取分享链接"""
         print(f"\n🔍 搜索: {query}")
         
         try:
-            print("📸 步骤1: 开启新对话")
             await self.new_conversation()
             
-            print("📸 步骤2: 找输入框")
             input_box = await self.page.wait_for_selector('textarea, div[contenteditable="true"]', timeout=10000)
-            print(f"✅ 找到输入框: {input_box}")
-            
-            print("📸 步骤3: 输入问题")
             await input_box.fill(query)
             print("✅ 问题已输入")
             
-            print("📸 步骤4: 按回车")
             await input_box.press('Enter')
             print("✅ 已发送")
             
-            print("📸 步骤5: 等待回答")
             await self.wait_for_answer_complete()
             
-            print("📸 步骤6: 尝试点击分享按钮")
-            share_result = await self.click_share_button()
-            print(f"点击分享按钮结果: {share_result}")
-            
-            if not share_result:
-                # 截图看看页面状态
-                await self.page.screenshot(path="debug_share_button.png")
-                print("📸 已保存截图: debug_share_button.png")
-                return None
-            
-            print("📸 步骤7: 点击创建分享")
-            create_result = await self.click_create_share()
-            print(f"点击创建分享结果: {create_result}")
-            
-            print("📸 步骤8: 点击创建并复制")
-            copy_result = await self.click_create_and_copy()
-            print(f"点击创建并复制结果: {copy_result}")
-            
-            print("📸 步骤9: 获取链接")
-            share_link = await self.get_share_link_from_clipboard()
+            share_link = await self.get_share_link()
             
             if share_link:
                 print(f"\n🎉 获取到分享链接: {share_link}")
             else:
                 print("\n❌ 获取失败")
-                # 截图看看弹窗状态
-                await self.page.screenshot(path="debug_clipboard.png")
-                print("📸 已保存截图: debug_clipboard.png")
             
-        return share_link
+            return share_link
             
         except Exception as e:
-            print(f"❌ 搜索出错: {e}")
-            # 出错时截图
-            try:
-                await self.page.screenshot(path=f"error_{int(time.time())}.png")
-                print(f"📸 已保存错误截图")
-            except:
-                pass
+            print(f"搜索出错: {e}")
             return None
     
     async def close(self):
         """关闭浏览器"""
-        if self.context:
-            await self.context.close()
-        if self.browser:
-            await self.browser.close()
-        if self.playwright:
-            await self.playwright.stop()
-        print("✅ 浏览器已关闭")
+        try:
+            if self.context:
+                await self.context.close()
+            if self.browser:
+                await self.browser.close()
+            if self.playwright:
+                await self.playwright.stop()
+            print("✅ 浏览器已关闭")
+        except Exception as e:
+            print(f"关闭浏览器时出错: {e}")
