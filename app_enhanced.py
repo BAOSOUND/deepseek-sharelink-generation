@@ -209,13 +209,24 @@ async def run_batch(questions, delay, show_browser, timeout):
         )
         await auto.start()
         
+        # ===== 关键修复：添加登录步骤 =====
         current_placeholder.markdown(
-            '<div><span class="loading-spinner"></span><span class="processing-text">🔐 正在登录...</span></div>',
+            '<div><span class="loading-spinner"></span><span class="processing-text">🔐 正在登录DeepSeek...</span></div>',
             unsafe_allow_html=True
         )
-        if not await auto.ensure_login():
-            current_placeholder.error("❌ 登录失败")
+        
+        # 调用登录函数
+        login_success = await auto.ensure_login()
+        if not login_success:
+            current_placeholder.error("❌ 登录失败，请检查cookie或手动登录")
+            await auto.close()
             return
+        else:
+            current_placeholder.markdown(
+                '<div><span class="loading-spinner"></span><span class="processing-text">✅ 登录成功，开始处理问题...</span></div>',
+                unsafe_allow_html=True
+            )
+        # =================================
         
         for i, question in enumerate(questions):
             progress = i / len(questions)
@@ -344,58 +355,3 @@ if st.session_state.batch_results:
 # 页脚
 st.markdown("---")
 st.caption("💡 提示：批量处理时请耐心等待")
-
-# ===== 部署修复：安装playwright浏览器和系统依赖 =====
-import subprocess
-import sys
-import os
-import time
-
-def setup_playwright():
-    """安装playwright浏览器和系统依赖"""
-    try:
-        print("🔧 开始安装playwright系统依赖...")
-        
-        # 方法1：使用playwright安装系统依赖（推荐）
-        deps_result = subprocess.run(
-            ["playwright", "install-deps"],
-            capture_output=True,
-            text=True,
-            timeout=300
-        )
-        
-        if deps_result.returncode == 0:
-            print("✅ 系统依赖安装成功")
-        else:
-            print("⚠️ 系统依赖安装可能不完整")
-            print(deps_result.stderr)
-        
-        # 安装chromium浏览器
-        print("📥 正在安装chromium浏览器...")
-        install_result = subprocess.run(
-            ["playwright", "install", "chromium"],
-            capture_output=True,
-            text=True,
-            timeout=180
-        )
-        
-        if install_result.returncode == 0:
-            print("✅ chromium浏览器安装成功")
-        else:
-            print("❌ 浏览器安装失败")
-            print(install_result.stderr)
-            
-    except subprocess.TimeoutExpired:
-        print("⏱️ 安装超时")
-    except Exception as e:
-        print(f"❌ 安装过程出错: {e}")
-    finally:
-        print("✅ playwright设置完成")
-
-# 只在非windows系统执行
-if not sys.platform.startswith('win'):
-    print("🖥️ 检测到Linux系统，开始安装playwright...")
-    setup_playwright()
-else:
-    print("🖥️ Windows系统，跳过playwright安装")
-# ======================================
