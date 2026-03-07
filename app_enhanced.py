@@ -344,3 +344,21 @@ if st.session_state.batch_results:
 # 页脚
 st.markdown("---")
 st.caption("💡 提示：批量处理时请耐心等待")
+
+# ===== 部署修复：安装playwright浏览器 =====
+import subprocess
+import sys
+
+def setup_playwright():
+    """确保playwright浏览器已安装"""
+    try:
+        print("正在检查playwright浏览器...")
+        subprocess.run(["playwright", "install", "chromium"], check=True)
+        print("playwright浏览器就绪")
+    except Exception as e:
+        print(f"playwright浏览器安装失败: {e}")
+
+# 只在非windows系统或明确需要时执行（避免本地重复安装）
+if not sys.platform.startswith('win'):
+    setup_playwright()
+# ======================================
