@@ -1,5 +1,5 @@
 """
-DeepSeek Online - 增强版Streamlit界面（修复类型错误）
+DeepSeek Online - 增强版Streamlit界面（修复重复运行）
 """
 
 import sys
@@ -208,15 +208,13 @@ async def run_batch(questions, delay, show_browser, timeout):
                 share_link = await auto.search_and_get_share_link(question)
                 current_time = datetime.now().strftime("%Y/%m/%d")
                 
-                # ===== 修复：确保所有值都是字符串 =====
                 result = {
-                    "序号": str(i + 1),  # 转换为字符串避免整数错误
+                    "序号": str(i + 1),
                     "问题": question[:50] + ("..." if len(question) > 50 else ""),
                     "分享链接": str(share_link) if share_link else "",
                     "状态": "✅ 成功" if share_link else "❌ 失败",
                     "数据时间": current_time
                 }
-                # ====================================
                 
                 st.session_state.batch_results.append(result)
                 
@@ -247,6 +245,9 @@ async def run_batch(questions, delay, show_browser, timeout):
     finally:
         await auto.close()
         st.session_state.batch_status = 'idle'
+        # ===== 移除 st.rerun() =====
+        # 不再自动刷新，让用户手动操作
+        # ===========================
 
 if start_button and questions:
     st.session_state.batch_status = 'running'
@@ -260,7 +261,9 @@ if start_button and questions:
     results_placeholder.empty()
     
     asyncio.run(run_batch(questions, delay, show_browser, timeout))
-    st.rerun()
+    # ===== 移除 st.rerun() =====
+    # 任务完成后不自动刷新
+    # ===========================
 
 # 显示结果
 if st.session_state.batch_results:
