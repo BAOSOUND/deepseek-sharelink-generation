@@ -1,5 +1,5 @@
 """
-DeepSeek网页版自动化模块 - 支持中英文按钮
+DeepSeek网页版自动化模块 - 添加按钮文本调试
 """
 
 import asyncio
@@ -70,17 +70,40 @@ class DeepSeekAuto:
         
         return self
     
+    # ===== 调试函数：查看所有按钮文本 =====
+    async def debug_print_buttons(self, stage=""):
+        """打印页面上所有按钮的文本"""
+        try:
+            buttons_text = await self.page.evaluate('''
+                () => {
+                    const buttons = document.querySelectorAll('button, [role="button"]');
+                    const texts = [];
+                    for (let btn of buttons) {
+                        const text = btn.textContent || '';
+                        if (text.trim()) {
+                            texts.push(text.trim());
+                        }
+                    }
+                    return texts;
+                }
+            ''')
+            print(f"\n📋 [{stage}] 页面上所有按钮文本:")
+            for i, text in enumerate(buttons_text):
+                print(f"  {i+1}. '{text}'")
+            print("")
+        except Exception as e:
+            print(f"❌ 获取按钮文本失败: {e}")
+    # ====================================
+    
     async def ensure_login(self):
-        """确保已登录 - 智能检测登录界面"""
+        """确保已登录"""
         
         print("\n========== 开始登录流程 ==========")
         
-        # 第一步：访问主页
         print("【1】访问主页...")
         await self.page.goto('https://chat.deepseek.com')
         await asyncio.sleep(1)
         
-        # 第二步：检查是否已登录
         print("【2】检查登录状态...")
         try:
             await self.page.wait_for_selector('textarea', timeout=2000)
@@ -89,14 +112,13 @@ class DeepSeekAuto:
         except:
             print("🔐 未登录，开始登录流程")
         
-        # 第三步：跳转到登录页
         print("【3】跳转到登录页...")
         await self.page.goto('https://chat.deepseek.com/sign_in')
         await asyncio.sleep(2)
         
-        # 第四步：智能检测当前登录界面类型
-        print("【4】检测登录界面类型...")
+        await self.debug_print_buttons("登录页")  # 调试：查看登录页按钮
         
+        print("【4】检测登录界面类型...")
         has_inputs = await self.page.evaluate('''
             () => {
                 const inputs = document.querySelectorAll('input[type="text"], input[type="password"]');
@@ -134,7 +156,6 @@ class DeepSeekAuto:
                 print(f"❌ 点击密码登录按钮失败: {e}")
                 return False
         
-        # 第五步：输入账号密码
         print("【5】输入账号密码...")
         username = os.getenv("DEEPSEEK_USER")
         password = os.getenv("DEEPSEEK_PWD")
@@ -161,7 +182,6 @@ class DeepSeekAuto:
             print(f"❌ 输入账号密码失败: {e}")
             return False
         
-        # 第六步：点击登录按钮
         print("【6】点击登录按钮...")
         try:
             login_texts = ['登录', '登陆', 'Sign in', 'Log in', 'Sign In', 'Log In']
@@ -199,7 +219,6 @@ class DeepSeekAuto:
             print(f"❌ 点击登录按钮失败: {e}")
             return False
         
-        # 第七步：等待登录成功
         print("【7】等待登录成功...")
         for i in range(15):
             await asyncio.sleep(1)
@@ -266,7 +285,7 @@ class DeepSeekAuto:
             pass
     
     async def click_share_button(self):
-        """点击分享按钮 - 用SVG特征"""
+        """点击分享按钮"""
         try:
             result = await self.page.evaluate('''
                 () => {
@@ -289,6 +308,7 @@ class DeepSeekAuto:
             ''')
             if result:
                 print("✅ 点击分享按钮")
+                await self.debug_print_buttons("点击分享后")  # 调试：查看弹窗按钮
                 return True
             print("❌ 找不到分享按钮")
             return False
@@ -296,32 +316,47 @@ class DeepSeekAuto:
             print(f"❌ 点击分享按钮出错: {e}")
             return False
 
-    # ===== 修复：支持中英文按钮 =====
     async def click_create_share(self):
-        """点击创建分享按钮 - 支持中英文"""
+        """点击创建分享按钮"""
         try:
-            # 中英文按钮文本
-            create_texts = ['创建分享', 'Create share', 'Create Share']
-            
-            result = await self.page.evaluate('''
-                (texts) => {
+            # 先打印所有按钮文本，看看实际是什么
+            buttons_text = await self.page.evaluate('''
+                () => {
                     const buttons = document.querySelectorAll('button, [role="button"]');
+                    const texts = [];
                     for (let btn of buttons) {
                         const text = btn.textContent || '';
-                        for (let target of texts) {
-                            if (text.includes(target)) {
+                        if (text.trim()) {
+                            texts.push(text.trim());
+                        }
+                    }
+                    return texts;
+                }
+            ''')
+            print(f"📋 当前页面按钮文本: {buttons_text}")
+            
+            # 尝试各种可能的文本
+            create_texts = ['创建分享', 'Create', 'Share', 'Generate', 'Public', 'Link']
+            
+            for text in create_texts:
+                result = await self.page.evaluate('''
+                    (target) => {
+                        const buttons = document.querySelectorAll('button, [role="button"]');
+                        for (let btn of buttons) {
+                            const btnText = btn.textContent || '';
+                            if (btnText.includes(target)) {
                                 btn.click();
                                 return true;
                             }
                         }
+                        return false;
                     }
-                    return false;
-                }
-            ''', create_texts)
+                ''', text)
+                
+                if result:
+                    print(f"✅ 点击包含 '{text}' 的按钮")
+                    return True
             
-            if result:
-                print("✅ 点击创建分享")
-                return True
             print("❌ 找不到创建分享按钮")
             return False
         except Exception as e:
@@ -329,36 +364,35 @@ class DeepSeekAuto:
             return False
 
     async def click_create_and_copy(self):
-        """点击创建并复制按钮 - 支持中英文"""
+        """点击创建并复制按钮"""
         try:
-            # 中英文按钮文本
-            copy_texts = ['创建并复制', 'Create and copy', 'Create & Copy']
+            # 尝试各种可能的文本
+            copy_texts = ['创建并复制', 'Copy', '复制']
             
-            result = await self.page.evaluate('''
-                (texts) => {
-                    const buttons = document.querySelectorAll('button, [role="button"]');
-                    for (let btn of buttons) {
-                        const text = btn.textContent || '';
-                        for (let target of texts) {
-                            if (text.includes(target)) {
+            for text in copy_texts:
+                result = await self.page.evaluate('''
+                    (target) => {
+                        const buttons = document.querySelectorAll('button, [role="button"]');
+                        for (let btn of buttons) {
+                            const btnText = btn.textContent || '';
+                            if (btnText.includes(target)) {
                                 btn.click();
                                 return true;
                             }
                         }
+                        return false;
                     }
-                    return false;
-                }
-            ''', copy_texts)
+                ''', text)
+                
+                if result:
+                    print(f"✅ 点击包含 '{text}' 的按钮")
+                    return True
             
-            if result:
-                print("✅ 点击创建并复制")
-                return True
             print("❌ 找不到创建并复制按钮")
             return False
         except Exception as e:
             print(f"❌ 点击创建并复制出错: {e}")
             return False
-    # =================================
 
     async def get_share_link(self):
         """获取分享链接"""
@@ -367,15 +401,15 @@ class DeepSeekAuto:
         try:
             if not await self.click_share_button():
                 return None
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
             
             if not await self.click_create_share():
                 return None
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
             
             if not await self.click_create_and_copy():
                 return None
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
             
             for attempt in range(3):
                 try:
