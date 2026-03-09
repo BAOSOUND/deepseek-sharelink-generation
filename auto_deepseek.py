@@ -1,5 +1,5 @@
 """
-DeepSeek网页版自动化模块 - 智能检测登录界面
+DeepSeek网页版自动化模块 - 修复类型错误
 """
 
 import asyncio
@@ -70,7 +70,6 @@ class DeepSeekAuto:
         
         return self
     
-    # ===== 智能检测登录界面状态 =====
     async def ensure_login(self):
         """确保已登录 - 智能检测登录界面"""
         
@@ -153,7 +152,8 @@ class DeepSeekAuto:
             
             if len(inputs) >= 2:
                 await inputs[0].fill(username)
-                print(f"✅ 账号已输入: {username[:4]}****{username[-4:]}")
+                masked_username = username[:4] + "****" + username[-4:] if len(username) > 8 else "****"
+                print(f"✅ 账号已输入: {masked_username}")
                 await inputs[1].fill(password)
                 print("✅ 密码已输入")
             else:
@@ -163,13 +163,11 @@ class DeepSeekAuto:
             print(f"❌ 输入账号密码失败: {e}")
             return False
         
-        # ===== 第六步：点击登录按钮（多语言支持）=====
+        # 第六步：点击登录按钮（多语言支持）
         print("【6】点击登录按钮...")
         try:
-            # 先查找所有可能的登录按钮文本
             login_texts = ['登录', '登陆', 'Sign in', 'Log in', 'Sign In', 'Log In']
             
-            # 方法1：通过按钮文本查找
             login_btn = None
             buttons = await self.page.query_selector_all('button')
             
@@ -185,13 +183,11 @@ class DeepSeekAuto:
                     if login_btn:
                         break
             
-            # 方法2：如果没找到，尝试找type="submit"的按钮
             if not login_btn:
                 login_btn = await self.page.query_selector('button[type="submit"]')
                 if login_btn:
                     print("✅ 找到提交按钮")
             
-            # 方法3：找最后一个按钮（通常登录按钮在最后）
             if not login_btn and len(buttons) > 0:
                 login_btn = buttons[-1]
                 print("✅ 使用最后一个按钮")
@@ -205,7 +201,6 @@ class DeepSeekAuto:
         except Exception as e:
             print(f"❌ 点击登录按钮失败: {e}")
             return False
-        # ====================================
         
         # 第七步：等待登录成功
         print("【7】等待登录成功...")
@@ -221,7 +216,6 @@ class DeepSeekAuto:
         
         print("❌ 登录超时")
         return False
-    # ==================================
     
     async def wait_for_answer_complete(self, timeout=30):
         """等待AI回答完全生成 - 快速版"""
@@ -299,8 +293,10 @@ class DeepSeekAuto:
             if result:
                 print("✅ 点击分享按钮")
                 return True
+            print("❌ 找不到分享按钮")
             return False
-        except:
+        except Exception as e:
+            print(f"❌ 点击分享按钮出错: {e}")
             return False
 
     async def click_create_share(self):
@@ -322,8 +318,10 @@ class DeepSeekAuto:
             if result:
                 print("✅ 点击创建分享")
                 return True
+            print("❌ 找不到创建分享按钮")
             return False
-        except:
+        except Exception as e:
+            print(f"❌ 点击创建分享出错: {e}")
             return False
 
     async def click_create_and_copy(self):
@@ -345,39 +343,49 @@ class DeepSeekAuto:
             if result:
                 print("✅ 点击创建并复制")
                 return True
+            print("❌ 找不到创建并复制按钮")
             return False
-        except:
+        except Exception as e:
+            print(f"❌ 点击创建并复制出错: {e}")
             return False
 
+    # ===== 修复类型错误 =====
     async def get_share_link(self):
-        """获取分享链接"""
+        """获取分享链接 - 修复类型错误"""
         print("开始获取分享链接...")
         
-        if not await self.click_share_button():
+        try:
+            if not await self.click_share_button():
+                return None
+            await asyncio.sleep(1)
+            
+            if not await self.click_create_share():
+                return None
+            await asyncio.sleep(1)
+            
+            if not await self.click_create_and_copy():
+                return None
+            await asyncio.sleep(1)
+            
+            # 从剪贴板获取链接
+            for attempt in range(3):
+                try:
+                    text = await self.page.evaluate('async () => await navigator.clipboard.readText()')
+                    if text and isinstance(text, str) and text.startswith('https://chat.deepseek.com/share/'):
+                        print(f"✅ 获取到分享链接")
+                        return text
+                    else:
+                        print(f"⏳ 等待有效链接... ({attempt+1}/3)")
+                except Exception as e:
+                    print(f"⏳ 等待剪贴板... ({attempt+1}/3)")
+                await asyncio.sleep(1)
+            
+            print("❌ 获取链接失败")
             return None
-        await asyncio.sleep(1)
-        
-        if not await self.click_create_share():
+        except Exception as e:
+            print(f"❌ 获取链接过程出错: {e}")
             return None
-        await asyncio.sleep(1)
-        
-        if not await self.click_create_and_copy():
-            return None
-        await asyncio.sleep(1)
-        
-        for attempt in range(3):
-            try:
-                text = await self.page.evaluate('async () => await navigator.clipboard.readText()')
-                if text and text.startswith('https://chat.deepseek.com/share/'):
-                    print(f"✅ 获取到分享链接")
-                    return text
-            except:
-                pass
-            print(f"⏳ 等待链接... ({attempt+1}/3)")
-            await asyncio.sleep(0.5)
-        
-        print("❌ 获取链接失败")
-        return None
+    # =========================
     
     async def search_and_get_share_link(self, query):
         """搜索并获取分享链接"""
@@ -405,7 +413,7 @@ class DeepSeekAuto:
             return share_link
             
         except Exception as e:
-            print(f"❌ 错误: {e}")
+            print(f"❌ 处理问题出错: {e}")
             return None
     
     async def close(self):
