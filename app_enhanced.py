@@ -1,5 +1,5 @@
 """
-DeepSeek Online - 增强版Streamlit界面（修复所有use_container_width警告）
+DeepSeek Online - 增强版Streamlit界面（云端调试版）
 """
 
 import sys
@@ -11,6 +11,13 @@ import os
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
+
+# ===== 云端调试：最先执行 =====
+print(f"🐍 Python版本: {sys.version}")
+print(f"🖥️ 系统平台: {sys.platform}")
+print(f"📂 当前目录: {os.getcwd()}")
+print(f"📁 文件列表: {os.listdir('.')}")
+# ============================
 
 # Windows平台修复
 if sys.platform == "win32":
@@ -48,7 +55,6 @@ st.markdown("""
         display: inline-block;
         vertical-align: middle;
     }
-    /* 让两个按钮宽度一致 */
     div[data-testid="column"] .stButton > button {
         width: 120px !important;
         min-width: 120px !important;
@@ -146,7 +152,7 @@ with col1:
     start_button = st.button(
         "🚀 开始生成",
         type="primary",
-        use_container_width=True,  # 这里不改，因为按钮的 use_container_width 没有警告
+        use_container_width=True,
         disabled=is_running
     )
 
@@ -165,6 +171,11 @@ current_placeholder = st.empty()
 results_placeholder = st.empty()
 
 async def run_batch(questions, delay, show_browser, timeout):
+    print("\n========== 开始批量处理 ==========")
+    print(f"📋 问题数量: {len(questions)}")
+    print(f"👁️ 显示浏览器: {show_browser}")
+    print(f"⏱️ 超时设置: {timeout}秒")
+    
     auto = DeepSeekAuto(headless=not show_browser, timeout=timeout)
     
     try:
@@ -172,17 +183,25 @@ async def run_batch(questions, delay, show_browser, timeout):
             '<div><span class="loading-spinner"></span><span class="processing-text">🚀 正在启动浏览器...</span></div>',
             unsafe_allow_html=True
         )
+        print("【步骤】调用 auto.start()")
         await auto.start()
+        print("【步骤】auto.start() 完成")
         
         current_placeholder.markdown(
             '<div><span class="loading-spinner"></span><span class="processing-text">🔐 正在登录...</span></div>',
             unsafe_allow_html=True
         )
-        if not await auto.ensure_login():
+        print("【步骤】调用 auto.ensure_login()")
+        login_success = await auto.ensure_login()
+        print(f"【步骤】登录结果: {login_success}")
+        
+        if not login_success:
             current_placeholder.error("❌ 登录失败")
             return
         
         for i, question in enumerate(questions):
+            print(f"\n【处理】第 {i+1}/{len(questions)} 个问题: {question[:50]}")
+            
             progress = i / len(questions)
             st.session_state.current_progress = progress
             progress_placeholder.progress(progress)
@@ -213,10 +232,10 @@ async def run_batch(questions, delay, show_browser, timeout):
                 
                 if st.session_state.batch_results:
                     df = pd.DataFrame(st.session_state.batch_results[-5:])
-                    # 修复：use_container_width -> width='stretch'
                     results_placeholder.dataframe(df, width='stretch', hide_index=True)
                 
             except Exception as e:
+                print(f"❌ 处理问题出错: {e}")
                 current_time = datetime.now().strftime("%Y/%m/%d")
                 st.session_state.batch_results.append({
                     "序号": i + 1,
@@ -233,9 +252,12 @@ async def run_batch(questions, delay, show_browser, timeout):
         current_placeholder.success(f"✅ 完成！共处理 {len(questions)} 个询问词")
         
     except Exception as e:
+        print(f"❌ 批量处理出错: {e}")
         current_placeholder.error(f"❌ 出错: {e}")
     finally:
+        print("【步骤】调用 auto.close()")
         await auto.close()
+        print("【步骤】auto.close() 完成")
         st.session_state.batch_status = 'idle'
 
 if start_button and questions:
@@ -274,7 +296,6 @@ if st.session_state.batch_results:
     
     st.markdown("#### 详细结果")
     display_df = df[['序号', '询问词', '状态', '分享链接', '数据时间']].copy()
-    # 修复：use_container_width -> width='stretch'
     st.dataframe(display_df, width='stretch', hide_index=True,
                  column_config={"分享链接": st.column_config.LinkColumn("分享链接")})
     
@@ -294,7 +315,6 @@ import sys
 if sys.platform.startswith('linux'):
     try:
         print("📦 正在安装playwright浏览器...")
-        # 安装chromium（Linux用）
         subprocess.run(["playwright", "install", "chromium"], check=True)
         print("✅ playwright浏览器安装完成")
     except Exception as e:
