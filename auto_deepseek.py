@@ -1,5 +1,5 @@
 """
-DeepSeek网页版自动化模块 - 云端适配版（用SVG特征定位密码登录）
+DeepSeek??? - ??
 """
 
 import asyncio
@@ -14,11 +14,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class DeepSeekAuto:
-    def __init__(self, headless=True, timeout=60):
-        # 云端强制 headless
+    def __init__(self, headless=True, timeout=120):  # ????120
+        # ?? headless
         is_linux = sys.platform.startswith('linux')
         if is_linux:
-            print("🐧 Linux环境：强制使用 headless 模式")
+            print("?? Linux? headless ??")
             self.headless = True
         else:
             self.headless = headless
@@ -69,7 +69,7 @@ class DeepSeekAuto:
         return self
     
     async def ensure_login(self):
-        """确保已登录 - 用SVG特征定位密码登录"""
+        """确保已登录"""
         
         print("\n========== 开始登录流程 ==========")
         
@@ -78,134 +78,74 @@ class DeepSeekAuto:
         try:
             await self.page.goto('https://chat.deepseek.com', wait_until='domcontentloaded')
             await self.page.wait_for_load_state('networkidle')
-            print("✅ 主页加载完成")
+            print(" 主页加载完成")
         except Exception as e:
-            print(f"❌ 主页加载失败: {e}")
+            print(f" 主页加载失败: {e}")
             return False
         
         # 步骤2: 检测是否已登录
         print("【步骤2】检测登录状态...")
         try:
             await self.page.wait_for_selector('textarea, div[contenteditable="true"]', timeout=5000)
-            print("✅ 检测到输入框，已登录")
+            print(" 检测到输入框，已登录")
             return True
         except:
-            print("⏱️ 未检测到输入框，需要登录")
+            print(" 未检测到输入框，需要登录")
+            return False  # 先简化，后面再处理登录
+    
+    # ===== 关键修复：正确等待回答完成 =====
+    async def wait_for_answer_complete(self, timeout=120):
+        """等待AI回答完全生成"""
+        print("等待AI生成完整回答...")
         
-        # 步骤3: 访问登录页
-        print("【步骤3】访问登录页...")
+        # 方法1：等待"停止生成"按钮出现然后消失
         try:
-            await self.page.goto('https://chat.deepseek.com/sign_in', wait_until='domcontentloaded')
-            await asyncio.sleep(2)
-            print("✅ 登录页加载完成")
-        except Exception as e:
-            print(f"❌ 登录页加载失败: {e}")
-            return False
-        
-        # ===== 关键修复：用SVG特征定位密码登录按钮 =====
-        print("【步骤4】用SVG特征定位密码登录按钮...")
-        try:
-            click_result = await self.page.evaluate('''
-                () => {
-                    const buttons = document.querySelectorAll('button.ds-sign-in-form__social-button');
-                    
-                    // 用SVG特征找密码登录按钮
-                    for (let i = 0; i < buttons.length; i++) {
-                        const btn = buttons[i];
-                        const svg = btn.querySelector('svg');
-                        if (svg) {
-                            const path = svg.querySelector('path');
-                            if (path) {
-                                const d = path.getAttribute('d') || '';
-                                // 密码登录按钮的SVG特征
-                                if (d.includes('8.65039') || d.includes('M8.65039')) {
-                                    btn.click();
-                                    return {success: true, method: 'svg_match'};
-                                }
-                            }
-                        }
-                    }
-                    
-                    // 如果没找到，点第二个按钮（备用方案）
-                    if (buttons.length >= 2) {
-                        buttons[1].click();
-                        return {success: true, method: 'fallback'};
-                    }
-                    return {success: false};
-                }
-            ''')
+            # 等待开始生成（"停止生成"按钮出现）
+            await self.page.wait_for_selector('button:has-text("停止生成")', timeout=30000)
+            print(" 检测到AI开始生成回答")
             
-            print(f"点击结果: {click_result}")
-            await asyncio.sleep(2)
+            # 等待生成完成（"停止生成"按钮消失）
+            await self.page.wait_for_selector('button:has-text("停止生成")', state='hidden', timeout=timeout*1000)
+            print(" 检测到AI生成完成")
             
-        except Exception as e:
-            print(f"❌ 点击按钮失败: {e}")
-            return False
-        # ============================================
-        
-        # 步骤5: 输入账号密码
-        print("【步骤5】输入账号密码...")
-        username = os.getenv("DEEPSEEK_USER")
-        password = os.getenv("DEEPSEEK_PWD")
-        
-        if not username or not password:
-            print("❌ 请设置账号密码")
-            return False
-        
-        try:
-            # 等待输入框出现
+            # 额外等待1秒确保内容完全加载
             await asyncio.sleep(1)
-            inputs = await self.page.query_selector_all('input[type="text"], input[type="password"]')
-            print(f"找到 {len(inputs)} 个输入框")
+            return True
             
-            if len(inputs) >= 2:
-                await inputs[0].fill(username)
-                print("✅ 账号已输入")
-                await inputs[1].fill(password)
-                print("✅ 密码已输入")
-            else:
-                print("❌ 输入框不足")
-                return False
         except Exception as e:
-            print(f"❌ 输入账号密码失败: {e}")
-            return False
+            print(f" 等待停止生成按钮超时: {e}")
         
-        # 步骤6: 点击登录按钮
-        print("【步骤6】点击登录按钮...")
-        try:
-            login_btn = None
-            buttons = await self.page.query_selector_all('button')
-            for btn in buttons:
-                btn_text = await btn.text_content()
-                if btn_text and ('登录' in btn_text or '登陆' in btn_text):
-                    login_btn = btn
-                    print(f"找到登录按钮: {btn_text}")
-                    break
-            
-            if login_btn:
-                await login_btn.click()
-                print("✅ 已点击登录按钮")
-            else:
-                print("❌ 找不到登录按钮")
-                return False
-        except Exception as e:
-            print(f"❌ 点击登录按钮失败: {e}")
-            return False
+        # 方法2：监控内容长度变化
+        print("监控内容变化...")
+        last_length = 0
+        stable_count = 0
         
-        # 步骤7: 等待登录成功
-        print("【步骤7】等待登录成功...")
-        for i in range(15):
-            await asyncio.sleep(1)
+        for i in range(timeout * 2):  # 每0.5秒检查一次
             try:
-                await self.page.wait_for_selector('textarea, div[contenteditable="true"]', timeout=1000)
-                print("✅ 登录成功！")
-                return True
+                # 获取最后一个回答的内容
+                messages = await self.page.query_selector_all('.ds-markdown, .markdown-body, [class*="message"]')
+                if messages:
+                    last_msg = messages[-1]
+                    current_text = await last_msg.text_content() or ""
+                    current_length = len(current_text.strip())
+                    
+                    if current_length > last_length:
+                        print(f" 内容正在生成... ({current_length} 字符)")
+                        last_length = current_length
+                        stable_count = 0
+                    elif current_length > 0 and current_length == last_length:
+                        stable_count += 1
+                        if stable_count >= 4:  # 连续2秒内容不变
+                            print(f" 内容稳定，生成完成 (共{current_length}字符)")
+                            return True
             except:
-                print(f"⏳ 等待登录... ({i+1}/15)")
-                continue
+                pass
+            
+            await asyncio.sleep(0.5)
         
-        print("❌ 登录超时")
-        return False
+        print(" 等待超时")
+        return True
+    # ======================================
     
     async def new_conversation(self):
         """开启新对话"""
@@ -219,25 +159,6 @@ class DeepSeekAuto:
             await asyncio.sleep(0.5)
         except:
             pass
-    
-    async def wait_for_answer_complete(self, timeout=120):
-        """等待回答完成"""
-        try:
-            await self.page.wait_for_selector('button:has-text("停止生成")', timeout=10)
-            await self.page.wait_for_selector('button:has-text("停止生成")', state='hidden', timeout=timeout*1000)
-            return True
-        except:
-            pass
-        
-        for i in range(20):
-            try:
-                messages = await self.page.query_selector_all('.ds-markdown, .markdown-body')
-                if messages:
-                    return True
-            except:
-                pass
-            await asyncio.sleep(2)
-        return True
     
     async def click_share_button(self):
         """点击分享按钮"""
@@ -255,6 +176,8 @@ class DeepSeekAuto:
                     return false;
                 }
             ''')
+            if result:
+                print(" 点击分享按钮")
             return result
         except:
             return False
@@ -275,6 +198,8 @@ class DeepSeekAuto:
                     return false;
                 }
             ''')
+            if result:
+                print(" 点击创建分享")
             return result
         except:
             return False
@@ -295,6 +220,8 @@ class DeepSeekAuto:
                     return false;
                 }
             ''')
+            if result:
+                print(" 点击创建并复制")
             return result
         except:
             return False
@@ -305,6 +232,7 @@ class DeepSeekAuto:
             try:
                 text = await self.page.evaluate('async () => await navigator.clipboard.readText()')
                 if text and text.startswith('https://chat.deepseek.com/share/'):
+                    print(f" 获取到分享链接")
                     return text
             except:
                 pass
@@ -326,28 +254,34 @@ class DeepSeekAuto:
     
     async def search_and_get_share_link(self, query):
         """搜索并获取分享链接"""
-        print(f"\n🔍 处理: {query}")
+        print(f"\n 处理: {query}")
         
         try:
             await self.new_conversation()
             
+            # 找到输入框
             input_box = await self.page.wait_for_selector('textarea, div[contenteditable="true"]', timeout=10000)
             await input_box.fill(query)
-            await input_box.press('Enter')
+            print(" 问题已输入")
             
+            await input_box.press('Enter')
+            print(" 已发送，等待回答...")
+            
+            # ===== 关键：等待回答完成 =====
             await self.wait_for_answer_complete()
+            # ============================
             
             share_link = await self.get_share_link()
             
             if share_link:
-                print(f"✅ 成功")
+                print(f" 成功获取链接")
             else:
-                print("❌ 失败")
+                print(" 获取链接失败")
             
             return share_link
             
         except Exception as e:
-            print(f"❌ 错误: {e}")
+            print(f" 错误: {e}")
             return None
     
     async def close(self):
@@ -357,5 +291,6 @@ class DeepSeekAuto:
                 await self.context.close()
             if self.playwright:
                 await self.playwright.stop()
+            print(" 浏览器已关闭")
         except:
             pass
