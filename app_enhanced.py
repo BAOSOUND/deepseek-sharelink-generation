@@ -1,5 +1,5 @@
 """
-DeepSeek Online - 增强版Streamlit界面（云端调试版）
+DeepSeek Online - 增强版Streamlit界面（修复类型错误）
 """
 
 import sys
@@ -12,13 +12,6 @@ from datetime import datetime
 from pathlib import Path
 import pandas as pd
 
-# ===== 云端调试：最先执行 =====
-print(f"🐍 Python版本: {sys.version}")
-print(f"🖥️ 系统平台: {sys.platform}")
-print(f"📂 当前目录: {os.getcwd()}")
-print(f"📁 文件列表: {os.listdir('.')}")
-# ============================
-
 # Windows平台修复
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -28,8 +21,8 @@ from auto_deepseek import DeepSeekAuto
 
 # 页面配置
 st.set_page_config(
-    page_title="DeepSeek 分享链接生成",
-    page_icon="🔗",
+    page_title="DeepSeek 批量搜索",
+    page_icon="🚀",
     layout="wide"
 )
 
@@ -78,7 +71,7 @@ if 'input_key' not in st.session_state:
     st.session_state.input_key = 0
 
 # 标题
-st.title("🔗 DeepSeek 分享链接生成")
+st.title("🚀 DeepSeek 批量搜索")
 st.markdown("---")
 
 # 侧边栏
@@ -90,7 +83,7 @@ with st.sidebar:
         html_code = f'<img src="data:image/png;base64,{img_data}" width="120" alt="宝宝爆是俺拉" title="宝宝爆是俺拉">'
         st.markdown(html_code, unsafe_allow_html=True)
     else:
-        st.markdown("### 🔗")
+        st.markdown("### 🚀")
     
     st.markdown("---")
     
@@ -121,12 +114,12 @@ with st.sidebar:
     st.caption("喜欢就分享出去")
 
 # 主界面
-st.markdown("### 📝 询问词列表")
-st.markdown("**每行一个询问词**")
+st.markdown("### 📝 问题列表")
+st.markdown("**每行一个问题**")
 
 input_key = f"question_input_{st.session_state.input_key}"
 edited_text = st.text_area(
-    "询问词列表",
+    "问题列表",
     value="",
     height=200,
     label_visibility="collapsed",
@@ -138,8 +131,8 @@ questions = [q.strip() for q in edited_text.split('\n') if q.strip()]
 st.session_state.questions = questions
 
 if questions:
-    st.info(f"📊 当前共 {len(questions)} 个询问词")
-    with st.expander("预览询问词列表"):
+    st.info(f"📊 当前共 {len(questions)} 个问题")
+    with st.expander("预览问题列表"):
         for i, q in enumerate(questions[:10], 1):
             st.write(f"{i}. {q}")
 
@@ -183,25 +176,19 @@ async def run_batch(questions, delay, show_browser, timeout):
             '<div><span class="loading-spinner"></span><span class="processing-text">🚀 正在启动浏览器...</span></div>',
             unsafe_allow_html=True
         )
-        print("【步骤】调用 auto.start()")
         await auto.start()
-        print("【步骤】auto.start() 完成")
         
         current_placeholder.markdown(
             '<div><span class="loading-spinner"></span><span class="processing-text">🔐 正在登录...</span></div>',
             unsafe_allow_html=True
         )
-        print("【步骤】调用 auto.ensure_login()")
         login_success = await auto.ensure_login()
-        print(f"【步骤】登录结果: {login_success}")
         
         if not login_success:
             current_placeholder.error("❌ 登录失败")
             return
         
         for i, question in enumerate(questions):
-            print(f"\n【处理】第 {i+1}/{len(questions)} 个问题: {question[:50]}")
-            
             progress = i / len(questions)
             st.session_state.current_progress = progress
             progress_placeholder.progress(progress)
@@ -221,27 +208,30 @@ async def run_batch(questions, delay, show_browser, timeout):
                 share_link = await auto.search_and_get_share_link(question)
                 current_time = datetime.now().strftime("%Y/%m/%d")
                 
+                # ===== 修复：确保所有值都是字符串 =====
                 result = {
-                    "序号": i + 1,
-                    "询问词": question[:50] + ("..." if len(question) > 50 else ""),
-                    "分享链接": share_link,
+                    "序号": str(i + 1),  # 转换为字符串避免整数错误
+                    "问题": question[:50] + ("..." if len(question) > 50 else ""),
+                    "分享链接": str(share_link) if share_link else "",
                     "状态": "✅ 成功" if share_link else "❌ 失败",
                     "数据时间": current_time
                 }
+                # ====================================
+                
                 st.session_state.batch_results.append(result)
                 
                 if st.session_state.batch_results:
                     df = pd.DataFrame(st.session_state.batch_results[-5:])
-                    results_placeholder.dataframe(df, width='stretch', hide_index=True)
+                    results_placeholder.dataframe(df, use_container_width=True, hide_index=True)
                 
             except Exception as e:
                 print(f"❌ 处理问题出错: {e}")
                 current_time = datetime.now().strftime("%Y/%m/%d")
                 st.session_state.batch_results.append({
-                    "序号": i + 1,
-                    "询问词": question[:50] + ("..." if len(question) > 50 else ""),
-                    "分享链接": None,
-                    "状态": f"❌ 错误: {str(e)[:30]}",
+                    "序号": str(i + 1),
+                    "问题": question[:50] + ("..." if len(question) > 50 else ""),
+                    "分享链接": "",
+                    "状态": f"❌ 错误",
                     "数据时间": current_time
                 })
             
@@ -249,15 +239,13 @@ async def run_batch(questions, delay, show_browser, timeout):
                 await asyncio.sleep(delay)
         
         progress_placeholder.progress(1.0)
-        current_placeholder.success(f"✅ 完成！共处理 {len(questions)} 个询问词")
+        current_placeholder.success(f"✅ 完成！共处理 {len(questions)} 个问题")
         
     except Exception as e:
         print(f"❌ 批量处理出错: {e}")
         current_placeholder.error(f"❌ 出错: {e}")
     finally:
-        print("【步骤】调用 auto.close()")
         await auto.close()
-        print("【步骤】auto.close() 完成")
         st.session_state.batch_status = 'idle'
 
 if start_button and questions:
@@ -295,8 +283,8 @@ if st.session_state.batch_results:
         st.metric("成功率", rate)
     
     st.markdown("#### 详细结果")
-    display_df = df[['序号', '询问词', '状态', '分享链接', '数据时间']].copy()
-    st.dataframe(display_df, width='stretch', hide_index=True,
+    display_df = df[['序号', '问题', '状态', '分享链接', '数据时间']].copy()
+    st.dataframe(display_df, use_container_width=True, hide_index=True,
                  column_config={"分享链接": st.column_config.LinkColumn("分享链接")})
     
     csv = df.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
@@ -311,7 +299,6 @@ st.caption("💡 提示：批量处理时请耐心等待")
 import subprocess
 import sys
 
-# 只在Linux系统（Streamlit Cloud）执行
 if sys.platform.startswith('linux'):
     try:
         print("📦 正在安装playwright浏览器...")
