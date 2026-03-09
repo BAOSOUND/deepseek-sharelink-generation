@@ -1,5 +1,5 @@
 """
-DeepSeek网页版自动化模块 - 强制中文模式（本地用）
+DeepSeek网页版自动化模块 - 修复连续运行问题
 """
 
 import asyncio
@@ -19,11 +19,10 @@ class DeepSeekAuto:
         if is_linux:
             print("🐧 Linux环境：强制使用 headless 模式")
             self.headless = True
-            self.is_english = True  # 云端默认英文
+            self.is_english = True
         else:
             self.headless = headless
-            self.is_english = False  # 本地强制中文！
-            print("🖥️ Windows环境：强制使用中文模式")
+            self.is_english = False
         
         self.timeout = timeout * 1000
         self.base_dir = Path(__file__).parent
@@ -247,18 +246,49 @@ class DeepSeekAuto:
         print("✅ 继续执行")
         return True
     
+    # ===== 修复：每次搜索前强制开启新对话 =====
     async def new_conversation(self):
-        """开启新对话"""
+        """强制开启新对话"""
+        print("强制开启新对话...")
         try:
-            await self.page.evaluate('''
+            # 方法1：点击新对话按钮
+            result = await self.page.evaluate('''
                 () => {
+                    // 找新对话按钮
                     const newChatBtn = document.querySelector('div._5a8ac7a.a084f19e');
-                    if (newChatBtn) newChatBtn.click();
+                    if (newChatBtn) {
+                        newChatBtn.click();
+                        return true;
+                    }
+                    
+                    // 找包含"新对话"的按钮
+                    const buttons = document.querySelectorAll('button, [role="button"]');
+                    for (let btn of buttons) {
+                        const text = btn.textContent || '';
+                        if (text.includes('新对话') || text.includes('New chat')) {
+                            btn.click();
+                            return true;
+                        }
+                    }
+                    return false;
                 }
             ''')
-            await asyncio.sleep(0.3)
-        except:
-            pass
+            
+            if result:
+                print("✅ 已点击新对话按钮")
+            else:
+                # 方法2：直接刷新页面
+                print("🔄 没找到新对话按钮，刷新页面")
+                await self.page.reload()
+            
+            await asyncio.sleep(2)
+            
+        except Exception as e:
+            print(f"⚠️ 开启新对话出错: {e}")
+            # 出错时也刷新页面
+            await self.page.reload()
+            await asyncio.sleep(2)
+    # ========================================
     
     async def click_share_button(self):
         """点击分享按钮"""
@@ -292,13 +322,10 @@ class DeepSeekAuto:
             print(f"❌ 点击分享按钮出错: {e}")
             return False
 
-    # ===== 根据系统平台强制选择语言 =====
     async def click_create_share(self):
-        """点击创建分享按钮 - 根据系统平台强制选择"""
+        """点击创建分享按钮"""
         try:
             if self.is_english:
-                # 云端英文
-                print("🔍 云端模式：尝试点击 'Create public link'")
                 result = await self.page.evaluate('''
                     () => {
                         const buttons = document.querySelectorAll('button, [role="button"]');
@@ -313,8 +340,6 @@ class DeepSeekAuto:
                     }
                 ''')
             else:
-                # 本地中文
-                print("🔍 本地模式：尝试点击 '创建分享'")
                 result = await self.page.evaluate('''
                     () => {
                         const buttons = document.querySelectorAll('button, [role="button"]');
@@ -330,24 +355,20 @@ class DeepSeekAuto:
                 ''')
             
             if result:
-                print("✅ 点击成功")
+                print("✅ 点击创建分享按钮")
                 await asyncio.sleep(2)
                 return True
-            
-            print("❌ 点击失败")
             return False
         except Exception as e:
             print(f"❌ 点击创建分享出错: {e}")
             return False
 
     async def click_create_and_copy(self):
-        """点击创建并复制按钮 - 根据系统平台强制选择"""
+        """点击创建并复制按钮"""
         try:
             await asyncio.sleep(2)
             
             if self.is_english:
-                # 云端英文
-                print("🔍 云端模式：尝试点击 'Create and copy'")
                 copy_texts = ['Create and copy', 'Copy']
                 for text in copy_texts:
                     result = await self.page.evaluate('''
@@ -368,8 +389,6 @@ class DeepSeekAuto:
                         print(f"✅ 点击 '{text}'")
                         return True
             else:
-                # 本地中文
-                print("🔍 本地模式：尝试点击 '创建并复制'")
                 result = await self.page.evaluate('''
                     () => {
                         const buttons = document.querySelectorAll('button, [role="button"]');
@@ -387,12 +406,10 @@ class DeepSeekAuto:
                     print("✅ 点击 '创建并复制'")
                     return True
             
-            print("❌ 找不到按钮")
             return False
         except Exception as e:
             print(f"❌ 点击创建并复制出错: {e}")
             return False
-    # ===================================
 
     async def get_share_link(self):
         """获取分享链接"""
@@ -432,6 +449,7 @@ class DeepSeekAuto:
         print(f"\n🔍 处理: {query}")
         
         try:
+            # 每次搜索前都开启新对话
             await self.new_conversation()
             
             input_box = await self.page.wait_for_selector('textarea, div[contenteditable="true"]', timeout=5000)
