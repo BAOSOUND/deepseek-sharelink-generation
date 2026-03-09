@@ -1,5 +1,5 @@
 """
-DeepSeek网页版自动化模块 - 修复类型错误
+DeepSeek网页版自动化模块 - 支持中英文按钮
 """
 
 import asyncio
@@ -97,7 +97,6 @@ class DeepSeekAuto:
         # 第四步：智能检测当前登录界面类型
         print("【4】检测登录界面类型...")
         
-        # 检测是否已经是密码登录界面（有输入框）
         has_inputs = await self.page.evaluate('''
             () => {
                 const inputs = document.querySelectorAll('input[type="text"], input[type="password"]');
@@ -110,7 +109,6 @@ class DeepSeekAuto:
         else:
             print("🔄 检测到社交登录界面，需要切换到密码登录")
             try:
-                # 用SVG特征找密码登录按钮
                 await self.page.evaluate('''
                     () => {
                         const buttons = document.querySelectorAll('button.ds-sign-in-form__social-button');
@@ -163,11 +161,10 @@ class DeepSeekAuto:
             print(f"❌ 输入账号密码失败: {e}")
             return False
         
-        # 第六步：点击登录按钮（多语言支持）
+        # 第六步：点击登录按钮
         print("【6】点击登录按钮...")
         try:
             login_texts = ['登录', '登陆', 'Sign in', 'Log in', 'Sign In', 'Log In']
-            
             login_btn = None
             buttons = await self.page.query_selector_all('button')
             
@@ -218,7 +215,7 @@ class DeepSeekAuto:
         return False
     
     async def wait_for_answer_complete(self, timeout=30):
-        """等待AI回答完全生成 - 快速版"""
+        """等待AI回答完全生成"""
         print("等待AI生成完整回答...")
         
         try:
@@ -269,7 +266,7 @@ class DeepSeekAuto:
             pass
     
     async def click_share_button(self):
-        """第一步：点击分享按钮"""
+        """点击分享按钮 - 用SVG特征"""
         try:
             result = await self.page.evaluate('''
                 () => {
@@ -299,22 +296,29 @@ class DeepSeekAuto:
             print(f"❌ 点击分享按钮出错: {e}")
             return False
 
+    # ===== 修复：支持中英文按钮 =====
     async def click_create_share(self):
-        """第二步：点击创建分享按钮"""
+        """点击创建分享按钮 - 支持中英文"""
         try:
+            # 中英文按钮文本
+            create_texts = ['创建分享', 'Create share', 'Create Share']
+            
             result = await self.page.evaluate('''
-                () => {
+                (texts) => {
                     const buttons = document.querySelectorAll('button, [role="button"]');
                     for (let btn of buttons) {
                         const text = btn.textContent || '';
-                        if (text.includes('创建分享')) {
-                            btn.click();
-                            return true;
+                        for (let target of texts) {
+                            if (text.includes(target)) {
+                                btn.click();
+                                return true;
+                            }
                         }
                     }
                     return false;
                 }
-            ''')
+            ''', create_texts)
+            
             if result:
                 print("✅ 点击创建分享")
                 return True
@@ -325,21 +329,27 @@ class DeepSeekAuto:
             return False
 
     async def click_create_and_copy(self):
-        """第三步：点击创建并复制按钮"""
+        """点击创建并复制按钮 - 支持中英文"""
         try:
+            # 中英文按钮文本
+            copy_texts = ['创建并复制', 'Create and copy', 'Create & Copy']
+            
             result = await self.page.evaluate('''
-                () => {
+                (texts) => {
                     const buttons = document.querySelectorAll('button, [role="button"]');
                     for (let btn of buttons) {
                         const text = btn.textContent || '';
-                        if (text.includes('创建并复制')) {
-                            btn.click();
-                            return true;
+                        for (let target of texts) {
+                            if (text.includes(target)) {
+                                btn.click();
+                                return true;
+                            }
                         }
                     }
                     return false;
                 }
-            ''')
+            ''', copy_texts)
+            
             if result:
                 print("✅ 点击创建并复制")
                 return True
@@ -348,10 +358,10 @@ class DeepSeekAuto:
         except Exception as e:
             print(f"❌ 点击创建并复制出错: {e}")
             return False
+    # =================================
 
-    # ===== 修复类型错误 =====
     async def get_share_link(self):
-        """获取分享链接 - 修复类型错误"""
+        """获取分享链接"""
         print("开始获取分享链接...")
         
         try:
@@ -367,15 +377,12 @@ class DeepSeekAuto:
                 return None
             await asyncio.sleep(1)
             
-            # 从剪贴板获取链接
             for attempt in range(3):
                 try:
                     text = await self.page.evaluate('async () => await navigator.clipboard.readText()')
                     if text and isinstance(text, str) and text.startswith('https://chat.deepseek.com/share/'):
                         print(f"✅ 获取到分享链接")
                         return text
-                    else:
-                        print(f"⏳ 等待有效链接... ({attempt+1}/3)")
                 except Exception as e:
                     print(f"⏳ 等待剪贴板... ({attempt+1}/3)")
                 await asyncio.sleep(1)
@@ -385,7 +392,6 @@ class DeepSeekAuto:
         except Exception as e:
             print(f"❌ 获取链接过程出错: {e}")
             return None
-    # =========================
     
     async def search_and_get_share_link(self, query):
         """搜索并获取分享链接"""
