@@ -93,13 +93,10 @@ class DeepSeekAuto:
         # 第三步：跳转到登录页
         print("【3】跳转到登录页...")
         await self.page.goto('https://chat.deepseek.com/sign_in')
-        await asyncio.sleep(2)  # 给页面充分加载时间
+        await asyncio.sleep(2)
         
         # 第四步：智能检测当前登录界面类型
         print("【4】检测登录界面类型...")
-        
-        # 截图保存当前界面（调试用）
-        await self.page.screenshot(path="debug_login_page.png")
         
         # 检测是否已经是密码登录界面（有输入框）
         has_inputs = await self.page.evaluate('''
@@ -156,7 +153,7 @@ class DeepSeekAuto:
             
             if len(inputs) >= 2:
                 await inputs[0].fill(username)
-                print(f"✅ 账号已输入: {username}")
+                print(f"✅ 账号已输入: {username[:4]}****{username[-4:]}")
                 await inputs[1].fill(password)
                 print("✅ 密码已输入")
             else:
@@ -166,16 +163,38 @@ class DeepSeekAuto:
             print(f"❌ 输入账号密码失败: {e}")
             return False
         
-        # 第六步：点击登录按钮
+        # ===== 第六步：点击登录按钮（多语言支持）=====
         print("【6】点击登录按钮...")
         try:
-            buttons = await self.page.query_selector_all('button')
+            # 先查找所有可能的登录按钮文本
+            login_texts = ['登录', '登陆', 'Sign in', 'Log in', 'Sign In', 'Log In']
+            
+            # 方法1：通过按钮文本查找
             login_btn = None
+            buttons = await self.page.query_selector_all('button')
+            
             for btn in buttons:
-                text = await btn.text_content()
-                if text and ('登录' in text or '登陆' in text):
-                    login_btn = btn
-                    break
+                btn_text = await btn.text_content()
+                if btn_text:
+                    btn_text = btn_text.strip()
+                    for text in login_texts:
+                        if text in btn_text:
+                            login_btn = btn
+                            print(f"✅ 找到登录按钮: '{btn_text}'")
+                            break
+                    if login_btn:
+                        break
+            
+            # 方法2：如果没找到，尝试找type="submit"的按钮
+            if not login_btn:
+                login_btn = await self.page.query_selector('button[type="submit"]')
+                if login_btn:
+                    print("✅ 找到提交按钮")
+            
+            # 方法3：找最后一个按钮（通常登录按钮在最后）
+            if not login_btn and len(buttons) > 0:
+                login_btn = buttons[-1]
+                print("✅ 使用最后一个按钮")
             
             if login_btn:
                 await login_btn.click()
@@ -186,6 +205,7 @@ class DeepSeekAuto:
         except Exception as e:
             print(f"❌ 点击登录按钮失败: {e}")
             return False
+        # ====================================
         
         # 第七步：等待登录成功
         print("【7】等待登录成功...")
