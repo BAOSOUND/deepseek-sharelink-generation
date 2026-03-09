@@ -1,5 +1,5 @@
 """
-DeepSeek网页版自动化模块 - 使用正确的按钮文本
+DeepSeek网页版自动化模块 - 强制中文模式（本地用）
 """
 
 import asyncio
@@ -19,8 +19,11 @@ class DeepSeekAuto:
         if is_linux:
             print("🐧 Linux环境：强制使用 headless 模式")
             self.headless = True
+            self.is_english = True  # 云端默认英文
         else:
             self.headless = headless
+            self.is_english = False  # 本地强制中文！
+            print("🖥️ Windows环境：强制使用中文模式")
         
         self.timeout = timeout * 1000
         self.base_dir = Path(__file__).parent
@@ -289,70 +292,107 @@ class DeepSeekAuto:
             print(f"❌ 点击分享按钮出错: {e}")
             return False
 
-    # ===== 使用正确的按钮文本 =====
+    # ===== 根据系统平台强制选择语言 =====
     async def click_create_share(self):
-        """点击创建分享按钮 - 使用 'Create public link'"""
+        """点击创建分享按钮 - 根据系统平台强制选择"""
         try:
-            # 根据日志，按钮文本是 'Create public link'
-            result = await self.page.evaluate('''
-                () => {
-                    const buttons = document.querySelectorAll('button, [role="button"]');
-                    for (let btn of buttons) {
-                        const text = btn.textContent || '';
-                        if (text.includes('Create public link')) {
-                            btn.click();
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-            ''')
-            
-            if result:
-                print("✅ 点击 'Create public link' 按钮")
-                return True
-            
-            print("❌ 找不到 'Create public link' 按钮")
-            return False
-        except Exception as e:
-            print(f"❌ 点击创建分享出错: {e}")
-            return False
-
-    async def click_create_and_copy(self):
-        """点击创建并复制按钮 - 等待下一个弹窗"""
-        try:
-            await asyncio.sleep(2)
-            print("⏳ 等待下一个弹窗...")
-            
-            # 点击第一个按钮后，应该会出现新弹窗
-            # 可能的按钮文本
-            copy_texts = ['Create and copy', 'Copy', '复制', '创建并复制']
-            
-            for text in copy_texts:
+            if self.is_english:
+                # 云端英文
+                print("🔍 云端模式：尝试点击 'Create public link'")
                 result = await self.page.evaluate('''
-                    (target) => {
+                    () => {
                         const buttons = document.querySelectorAll('button, [role="button"]');
                         for (let btn of buttons) {
-                            const btnText = btn.textContent || '';
-                            if (btnText.includes(target)) {
+                            const text = btn.textContent || '';
+                            if (text.includes('Create public link')) {
                                 btn.click();
                                 return true;
                             }
                         }
                         return false;
                     }
-                ''', text)
-                
+                ''')
+            else:
+                # 本地中文
+                print("🔍 本地模式：尝试点击 '创建分享'")
+                result = await self.page.evaluate('''
+                    () => {
+                        const buttons = document.querySelectorAll('button, [role="button"]');
+                        for (let btn of buttons) {
+                            const text = btn.textContent || '';
+                            if (text.includes('创建分享')) {
+                                btn.click();
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                ''')
+            
+            if result:
+                print("✅ 点击成功")
+                await asyncio.sleep(2)
+                return True
+            
+            print("❌ 点击失败")
+            return False
+        except Exception as e:
+            print(f"❌ 点击创建分享出错: {e}")
+            return False
+
+    async def click_create_and_copy(self):
+        """点击创建并复制按钮 - 根据系统平台强制选择"""
+        try:
+            await asyncio.sleep(2)
+            
+            if self.is_english:
+                # 云端英文
+                print("🔍 云端模式：尝试点击 'Create and copy'")
+                copy_texts = ['Create and copy', 'Copy']
+                for text in copy_texts:
+                    result = await self.page.evaluate('''
+                        (target) => {
+                            const buttons = document.querySelectorAll('button, [role="button"]');
+                            for (let btn of buttons) {
+                                const btnText = btn.textContent || '';
+                                if (btnText.includes(target)) {
+                                    btn.click();
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }
+                    ''', text)
+                    
+                    if result:
+                        print(f"✅ 点击 '{text}'")
+                        return True
+            else:
+                # 本地中文
+                print("🔍 本地模式：尝试点击 '创建并复制'")
+                result = await self.page.evaluate('''
+                    () => {
+                        const buttons = document.querySelectorAll('button, [role="button"]');
+                        for (let btn of buttons) {
+                            const text = btn.textContent || '';
+                            if (text.includes('创建并复制')) {
+                                btn.click();
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                ''')
                 if result:
-                    print(f"✅ 点击包含 '{text}' 的按钮")
+                    print("✅ 点击 '创建并复制'")
                     return True
             
-            print("❌ 找不到创建并复制按钮")
+            print("❌ 找不到按钮")
             return False
         except Exception as e:
             print(f"❌ 点击创建并复制出错: {e}")
             return False
-    # =============================
+    # ===================================
 
     async def get_share_link(self):
         """获取分享链接"""
@@ -365,7 +405,7 @@ class DeepSeekAuto:
             
             if not await self.click_create_share():
                 return None
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
             
             if not await self.click_create_and_copy():
                 return None
