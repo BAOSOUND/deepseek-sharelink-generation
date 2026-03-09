@@ -1,5 +1,5 @@
 """
-DeepSeek Online - 增强版Streamlit界面（修复重复运行）
+DeepSeek Online - 增强版Streamlit界面（修复按钮重叠）
 """
 
 import sys
@@ -26,9 +26,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# 自定义CSS
+# ===== 修复CSS：解决按钮重叠问题 =====
 st.markdown("""
 <style>
+    /* 旋转加载动画 */
     @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
@@ -48,13 +49,37 @@ st.markdown("""
         display: inline-block;
         vertical-align: middle;
     }
+    
+    /* 修复按钮容器 */
+    div[data-testid="column"] {
+        padding: 0 5px !important;
+    }
+    
+    /* 按钮样式统一 */
     div[data-testid="column"] .stButton > button {
         width: 120px !important;
         min-width: 120px !important;
         max-width: 120px !important;
+        height: 40px !important;
+        margin: 0 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    
+    /* 确保第三列占满剩余空间 */
+    div[data-testid="column"]:nth-child(3) {
+        flex: 1 !important;
+    }
+    
+    /* 修复按钮行布局 */
+    .stHorizontalBlock {
+        gap: 0px !important;
+        align-items: center !important;
     }
 </style>
 """, unsafe_allow_html=True)
+# ====================================
 
 # 初始化session state
 if 'batch_results' not in st.session_state:
@@ -136,7 +161,7 @@ if questions:
         for i, q in enumerate(questions[:10], 1):
             st.write(f"{i}. {q}")
 
-# 按钮布局
+# 按钮布局 - 使用三列，前两列固定宽度
 col1, col2, col3 = st.columns([1, 1, 6])
 
 with col1:
@@ -156,6 +181,9 @@ with col2:
         st.session_state.current_progress = 0
         st.session_state.input_key += 1
         st.rerun()
+
+with col3:
+    st.empty()  # 占位
 
 # 进度显示
 progress_placeholder = st.empty()
@@ -245,9 +273,6 @@ async def run_batch(questions, delay, show_browser, timeout):
     finally:
         await auto.close()
         st.session_state.batch_status = 'idle'
-        # ===== 移除 st.rerun() =====
-        # 不再自动刷新，让用户手动操作
-        # ===========================
 
 if start_button and questions:
     st.session_state.batch_status = 'running'
@@ -261,9 +286,6 @@ if start_button and questions:
     results_placeholder.empty()
     
     asyncio.run(run_batch(questions, delay, show_browser, timeout))
-    # ===== 移除 st.rerun() =====
-    # 任务完成后不自动刷新
-    # ===========================
 
 # 显示结果
 if st.session_state.batch_results:
