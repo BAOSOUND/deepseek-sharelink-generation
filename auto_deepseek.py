@@ -1,5 +1,5 @@
 """
-DeepSeek网页版自动化模块 - 添加按钮文本调试
+DeepSeek网页版自动化模块 - 使用正确的按钮文本
 """
 
 import asyncio
@@ -70,31 +70,6 @@ class DeepSeekAuto:
         
         return self
     
-    # ===== 调试函数：查看所有按钮文本 =====
-    async def debug_print_buttons(self, stage=""):
-        """打印页面上所有按钮的文本"""
-        try:
-            buttons_text = await self.page.evaluate('''
-                () => {
-                    const buttons = document.querySelectorAll('button, [role="button"]');
-                    const texts = [];
-                    for (let btn of buttons) {
-                        const text = btn.textContent || '';
-                        if (text.trim()) {
-                            texts.push(text.trim());
-                        }
-                    }
-                    return texts;
-                }
-            ''')
-            print(f"\n📋 [{stage}] 页面上所有按钮文本:")
-            for i, text in enumerate(buttons_text):
-                print(f"  {i+1}. '{text}'")
-            print("")
-        except Exception as e:
-            print(f"❌ 获取按钮文本失败: {e}")
-    # ====================================
-    
     async def ensure_login(self):
         """确保已登录"""
         
@@ -115,8 +90,6 @@ class DeepSeekAuto:
         print("【3】跳转到登录页...")
         await self.page.goto('https://chat.deepseek.com/sign_in')
         await asyncio.sleep(2)
-        
-        await self.debug_print_buttons("登录页")  # 调试：查看登录页按钮
         
         print("【4】检测登录界面类型...")
         has_inputs = await self.page.evaluate('''
@@ -308,7 +281,7 @@ class DeepSeekAuto:
             ''')
             if result:
                 print("✅ 点击分享按钮")
-                await self.debug_print_buttons("点击分享后")  # 调试：查看弹窗按钮
+                await asyncio.sleep(2)
                 return True
             print("❌ 找不到分享按钮")
             return False
@@ -316,58 +289,44 @@ class DeepSeekAuto:
             print(f"❌ 点击分享按钮出错: {e}")
             return False
 
+    # ===== 使用正确的按钮文本 =====
     async def click_create_share(self):
-        """点击创建分享按钮"""
+        """点击创建分享按钮 - 使用 'Create public link'"""
         try:
-            # 先打印所有按钮文本，看看实际是什么
-            buttons_text = await self.page.evaluate('''
+            # 根据日志，按钮文本是 'Create public link'
+            result = await self.page.evaluate('''
                 () => {
                     const buttons = document.querySelectorAll('button, [role="button"]');
-                    const texts = [];
                     for (let btn of buttons) {
                         const text = btn.textContent || '';
-                        if (text.trim()) {
-                            texts.push(text.trim());
+                        if (text.includes('Create public link')) {
+                            btn.click();
+                            return true;
                         }
                     }
-                    return texts;
+                    return false;
                 }
             ''')
-            print(f"📋 当前页面按钮文本: {buttons_text}")
             
-            # 尝试各种可能的文本
-            create_texts = ['创建分享', 'Create', 'Share', 'Generate', 'Public', 'Link']
+            if result:
+                print("✅ 点击 'Create public link' 按钮")
+                return True
             
-            for text in create_texts:
-                result = await self.page.evaluate('''
-                    (target) => {
-                        const buttons = document.querySelectorAll('button, [role="button"]');
-                        for (let btn of buttons) {
-                            const btnText = btn.textContent || '';
-                            if (btnText.includes(target)) {
-                                btn.click();
-                                return true;
-                            }
-                        }
-                        return false;
-                    }
-                ''', text)
-                
-                if result:
-                    print(f"✅ 点击包含 '{text}' 的按钮")
-                    return True
-            
-            print("❌ 找不到创建分享按钮")
+            print("❌ 找不到 'Create public link' 按钮")
             return False
         except Exception as e:
             print(f"❌ 点击创建分享出错: {e}")
             return False
 
     async def click_create_and_copy(self):
-        """点击创建并复制按钮"""
+        """点击创建并复制按钮 - 等待下一个弹窗"""
         try:
-            # 尝试各种可能的文本
-            copy_texts = ['创建并复制', 'Copy', '复制']
+            await asyncio.sleep(2)
+            print("⏳ 等待下一个弹窗...")
+            
+            # 点击第一个按钮后，应该会出现新弹窗
+            # 可能的按钮文本
+            copy_texts = ['Create and copy', 'Copy', '复制', '创建并复制']
             
             for text in copy_texts:
                 result = await self.page.evaluate('''
@@ -393,6 +352,7 @@ class DeepSeekAuto:
         except Exception as e:
             print(f"❌ 点击创建并复制出错: {e}")
             return False
+    # =============================
 
     async def get_share_link(self):
         """获取分享链接"""
