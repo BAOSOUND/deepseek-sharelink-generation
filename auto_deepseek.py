@@ -1,5 +1,5 @@
 """
-DeepSeek网页版自动化模块 - 修复连续运行问题
+DeepSeek网页版自动化模块 - 修复连续搜索时的答案选择
 """
 
 import asyncio
@@ -32,6 +32,7 @@ class DeepSeekAuto:
         self.context = None
         self.page = None
         self._last_read_link = None
+        self.last_question = None  # 记录上一个问题
         
     async def start(self):
         print("【启动】开始启动浏览器...")
@@ -246,9 +247,9 @@ class DeepSeekAuto:
         print("✅ 继续执行")
         return True
     
-    # ===== 修复：每次搜索前强制开启新对话 =====
+    # ===== 修复：强制开启全新对话，清除历史 =====
     async def new_conversation(self):
-        """强制开启新对话"""
+        """强制开启全新对话 - 确保不选中历史答案"""
         print("强制开启新对话...")
         try:
             # 方法1：点击新对话按钮
@@ -261,7 +262,7 @@ class DeepSeekAuto:
                         return true;
                     }
                     
-                    // 找包含"新对话"的按钮
+                    // 找包含"新对话"或"New chat"的按钮
                     const buttons = document.querySelectorAll('button, [role="button"]');
                     for (let btn of buttons) {
                         const text = btn.textContent || '';
@@ -281,14 +282,20 @@ class DeepSeekAuto:
                 print("🔄 没找到新对话按钮，刷新页面")
                 await self.page.reload()
             
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)  # 增加等待时间
             
+            # 确保输入框可用
+            try:
+                await self.page.wait_for_selector('textarea', timeout=5000)
+                print("✅ 输入框已就绪")
+            except:
+                print("⚠️ 等待输入框超时")
+                
         except Exception as e:
             print(f"⚠️ 开启新对话出错: {e}")
-            # 出错时也刷新页面
             await self.page.reload()
-            await asyncio.sleep(2)
-    # ========================================
+            await asyncio.sleep(3)
+    # ==========================================
     
     async def click_share_button(self):
         """点击分享按钮"""
@@ -452,6 +459,7 @@ class DeepSeekAuto:
             # 每次搜索前都开启新对话
             await self.new_conversation()
             
+            # 找到输入框
             input_box = await self.page.wait_for_selector('textarea, div[contenteditable="true"]', timeout=5000)
             await input_box.fill(query)
             print("✅ 问题已输入")
@@ -460,6 +468,31 @@ class DeepSeekAuto:
             print("✅ 已发送，等待回答...")
             
             await self.wait_for_answer_complete()
+            
+            # ===== 关键修复：强制点击最新回答区域 =====
+            await asyncio.sleep(1)
+            try:
+                # 点击最后一个回答区域，确保选中
+                await self.page.evaluate('''
+                    () => {
+                        const messages = document.querySelectorAll('.ds-markdown, .markdown-body, [class*="message"]');
+                        if (messages.length > 0) {
+                            const lastMsg = messages[messages.length - 1];
+                            // 点击消息区域顶部
+                            const rect = lastMsg.getBoundingClientRect();
+                            window.scrollTo(0, rect.top - 100);
+                            // 模拟点击
+                            lastMsg.click();
+                            return true;
+                        }
+                        return false;
+                    }
+                ''')
+                print("✅ 已点击最新回答区域")
+                await asyncio.sleep(1)
+            except Exception as e:
+                print(f"⚠️ 点击回答区域失败: {e}")
+            # ======================================
             
             share_link = await self.get_share_link()
             
