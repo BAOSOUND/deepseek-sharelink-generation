@@ -1,5 +1,5 @@
 """
-DeepSeek网页版自动化模块 - 修复连续搜索时的答案选择
+DeepSeek网页版自动化模块 - 彻底修复连续搜索
 """
 
 import asyncio
@@ -32,7 +32,7 @@ class DeepSeekAuto:
         self.context = None
         self.page = None
         self._last_read_link = None
-        self.last_question = None  # 记录上一个问题
+        self.question_count = 0  # 记录问题序号
         
     async def start(self):
         print("【启动】开始启动浏览器...")
@@ -247,10 +247,11 @@ class DeepSeekAuto:
         print("✅ 继续执行")
         return True
     
-    # ===== 修复：强制开启全新对话，清除历史 =====
-    async def new_conversation(self):
-        """强制开启全新对话 - 确保不选中历史答案"""
-        print("强制开启新对话...")
+    # ===== 彻底修复：强制开启全新对话 =====
+    async def new_conversation(self, question_index):
+        """强制开启全新对话 - 确保每次都是新对话"""
+        print(f"\n🔄 准备第 {question_index+1} 个问题，强制开启新对话...")
+        
         try:
             # 方法1：点击新对话按钮
             result = await self.page.evaluate('''
@@ -259,7 +260,7 @@ class DeepSeekAuto:
                     const newChatBtn = document.querySelector('div._5a8ac7a.a084f19e');
                     if (newChatBtn) {
                         newChatBtn.click();
-                        return true;
+                        return 'button_found';
                     }
                     
                     // 找包含"新对话"或"New chat"的按钮
@@ -268,34 +269,39 @@ class DeepSeekAuto:
                         const text = btn.textContent || '';
                         if (text.includes('新对话') || text.includes('New chat')) {
                             btn.click();
-                            return true;
+                            return 'text_found';
                         }
                     }
-                    return false;
+                    return 'not_found';
                 }
             ''')
             
-            if result:
-                print("✅ 已点击新对话按钮")
-            else:
-                # 方法2：直接刷新页面
-                print("🔄 没找到新对话按钮，刷新页面")
-                await self.page.reload()
+            print(f"✅ 新对话操作: {result}")
             
-            await asyncio.sleep(3)  # 增加等待时间
+            # 方法2：如果没找到按钮，直接导航到新对话URL（如果有）
+            if result == 'not_found':
+                print("🔄 没找到新对话按钮，尝试通过URL重置")
+                await self.page.goto('https://chat.deepseek.com')
+                await asyncio.sleep(2)
             
-            # 确保输入框可用
+            # 等待新对话加载
+            await asyncio.sleep(3)
+            
+            # 确保输入框存在
             try:
                 await self.page.wait_for_selector('textarea', timeout=5000)
-                print("✅ 输入框已就绪")
+                print("✅ 新对话已准备就绪")
             except:
-                print("⚠️ 等待输入框超时")
+                print("⚠️ 输入框未出现，刷新页面")
+                await self.page.reload()
+                await asyncio.sleep(3)
                 
         except Exception as e:
             print(f"⚠️ 开启新对话出错: {e}")
+            # 出错时强制刷新页面
             await self.page.reload()
             await asyncio.sleep(3)
-    # ==========================================
+    # ======================================
     
     async def click_share_button(self):
         """点击分享按钮"""
@@ -456,8 +462,8 @@ class DeepSeekAuto:
         print(f"\n🔍 处理: {query}")
         
         try:
-            # 每次搜索前都开启新对话
-            await self.new_conversation()
+            # 每次搜索前都开启新对话（传入序号）
+            await self.new_conversation(self.question_count)
             
             # 找到输入框
             input_box = await self.page.wait_for_selector('textarea, div[contenteditable="true"]', timeout=5000)
@@ -469,35 +475,14 @@ class DeepSeekAuto:
             
             await self.wait_for_answer_complete()
             
-            # ===== 关键修复：强制点击最新回答区域 =====
-            await asyncio.sleep(1)
-            try:
-                # 点击最后一个回答区域，确保选中
-                await self.page.evaluate('''
-                    () => {
-                        const messages = document.querySelectorAll('.ds-markdown, .markdown-body, [class*="message"]');
-                        if (messages.length > 0) {
-                            const lastMsg = messages[messages.length - 1];
-                            // 点击消息区域顶部
-                            const rect = lastMsg.getBoundingClientRect();
-                            window.scrollTo(0, rect.top - 100);
-                            // 模拟点击
-                            lastMsg.click();
-                            return true;
-                        }
-                        return false;
-                    }
-                ''')
-                print("✅ 已点击最新回答区域")
-                await asyncio.sleep(1)
-            except Exception as e:
-                print(f"⚠️ 点击回答区域失败: {e}")
-            # ======================================
+            # 增加等待确保界面稳定
+            await asyncio.sleep(2)
             
             share_link = await self.get_share_link()
             
             if share_link:
                 print(f"✅ 成功获取链接")
+                self.question_count += 1  # 问题序号+1
             else:
                 print("❌ 获取链接失败")
             
