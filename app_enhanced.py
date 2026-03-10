@@ -1,5 +1,5 @@
 """
-DeepSeek Online - 增强版Streamlit界面（修复按钮重叠）
+DeepSeek Online - 最终优化版
 """
 
 import sys
@@ -21,12 +21,12 @@ from auto_deepseek import DeepSeekAuto
 
 # 页面配置
 st.set_page_config(
-    page_title="DeepSeek 批量搜索",
-    page_icon="🚀",
+    page_title="DeepSeek 分享链接提取",
+    page_icon="🔗",
     layout="wide"
 )
 
-# ===== 修复CSS：解决按钮重叠问题 =====
+# ===== 优化CSS =====
 st.markdown("""
 <style>
     /* 旋转加载动画 */
@@ -77,6 +77,21 @@ st.markdown("""
         gap: 0px !important;
         align-items: center !important;
     }
+    
+    /* 登录状态区域 - 两行布局 */
+    div[data-testid="column"] .stButton > button {
+        width: 100% !important;
+    }
+    
+    /* 移除问号提示 */
+    .stTooltipIcon {
+        display: none !important;
+    }
+    
+    /* 自定义tooltip样式（如果需要） */
+    [data-testid="stTooltipHoverTarget"] {
+        display: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 # ====================================
@@ -95,8 +110,8 @@ if 'questions' not in st.session_state:
 if 'input_key' not in st.session_state:
     st.session_state.input_key = 0
 
-# 标题
-st.title("🚀 DeepSeek 批量搜索")
+# ===== 修改标题 =====
+st.title("🔗 DeepSeek 分享链接提取")
 st.markdown("---")
 
 # 侧边栏
@@ -108,7 +123,7 @@ with st.sidebar:
         html_code = f'<img src="data:image/png;base64,{img_data}" width="120" alt="宝宝爆是俺拉" title="宝宝爆是俺拉">'
         st.markdown(html_code, unsafe_allow_html=True)
     else:
-        st.markdown("### 🚀")
+        st.markdown("### 🔗")
     
     st.markdown("---")
     
@@ -117,23 +132,47 @@ with st.sidebar:
     
     with st.expander("🔧 条件配置", expanded=True):
         st.markdown("#### 🍪 登录状态")
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col1:
-            if is_logged_in:
-                st.success("✅ 已就绪")
-            else:
-                st.warning("⚠️ 首次运行需要登录")
-        with col2:
-            if is_logged_in and st.button("🗑️ 清除", use_container_width=True):
+        
+        # ===== 登录状态改为两行布局 =====
+        if is_logged_in:
+            st.success("✅ 已就绪")
+        else:
+            st.warning("⚠️ 首次运行需要登录")
+        
+        # 清除按钮独立一行，宽度一致
+        if is_logged_in:
+            if st.button("🗑️ 清除登录状态", use_container_width=True):
                 import shutil
                 shutil.rmtree(browser_data_dir)
                 st.rerun()
+        # ================================
         
         st.markdown("---")
         
-        show_browser = st.checkbox("👁️ 浏览器监测", value=False)
-        delay = st.number_input("⏱️ 问题间隔（秒）", min_value=1, max_value=30, value=2)
-        timeout = st.number_input("⏰ 等待超时（秒）", min_value=30, max_value=180, value=60)
+        # ===== 移除问号提示 =====
+        show_browser = st.checkbox(
+            "👁️ 浏览器监测",
+            value=False,
+            help="",  # 清空help，移除问号
+            key="show_browser_checkbox"
+        )
+        # ======================
+        
+        delay = st.number_input(
+            "⏱️ 问题间隔（秒）",
+            min_value=1,
+            max_value=30,
+            value=2,
+            help=""  # 清空help
+        )
+        
+        timeout = st.number_input(
+            "⏰ 等待超时（秒）",
+            min_value=30,
+            max_value=180,
+            value=60,
+            help=""  # 清空help
+        )
     
     st.markdown("---")
     st.caption("喜欢就分享出去")
@@ -149,7 +188,8 @@ edited_text = st.text_area(
     height=200,
     label_visibility="collapsed",
     placeholder="例如：\nPython异步编程的优点\n机器学习入门方法\n2024年AI发展趋势",
-    key=input_key
+    key=input_key,
+    help=""  # 清空help
 )
 
 questions = [q.strip() for q in edited_text.split('\n') if q.strip()]
@@ -161,7 +201,7 @@ if questions:
         for i, q in enumerate(questions[:10], 1):
             st.write(f"{i}. {q}")
 
-# 按钮布局 - 使用三列，前两列固定宽度
+# 按钮布局
 col1, col2, col3 = st.columns([1, 1, 6])
 
 with col1:
@@ -183,7 +223,7 @@ with col2:
         st.rerun()
 
 with col3:
-    st.empty()  # 占位
+    st.empty()
 
 # 进度显示
 progress_placeholder = st.empty()
